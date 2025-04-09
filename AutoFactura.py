@@ -11,6 +11,13 @@ from io import BytesIO
 pytesseract.pytesseract.tesseract_cmd = r'C:\Users\miguel-guinot\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
 
 # El resto de tu código que usa pytesseract o cualquier otra librería
+def cargar_clientes(archivo='clientes.txt'):
+    try:
+        with open(archivo, 'r', encoding='utf-8') as f:
+            return [line.strip() for line in f if line.strip()]
+    except FileNotFoundError:
+        print(f"[ERROR] No se encontró el archivo de clientes: {archivo}")
+        return []
 
 # Función para convertir un archivo DOCX a PDF
 def docx_to_pdf(docx_path):
@@ -72,15 +79,14 @@ def ocr_en_imagen(pdf_path):
 
 # Función para extraer número de cliente de un documento (ya sea texto o imagen)
 def extraer_cliente(doc_path):
-    cliente = None
+    clientes = cargar_clientes()
+    texto = ""
+
     if doc_path.endswith('.docx'):
         try:
+            from docx import Document
             doc = Document(doc_path)
-            for p in doc.paragraphs:
-                match = re.search(r'Cliente(\d+)', p.text)
-                if match:
-                    cliente = match.group(1)
-                    break
+            texto = "\n".join(p.text for p in doc.paragraphs)
         except Exception as e:
             print(f"[ERROR] No se pudo leer el archivo DOCX: {doc_path}. Error: {e}")
     
@@ -88,17 +94,18 @@ def extraer_cliente(doc_path):
         texto = extraer_texto_pdf(doc_path)
         if not texto.strip():  # Si no se extrajo texto, intentar con OCR
             texto = ocr_en_imagen(doc_path)
-        
-        match = re.search(r'Cliente(\d+)', texto)
-        if match:
-            cliente = match.group(1)
     
-    return cliente
+    for cliente in clientes:
+        if cliente.lower() in texto.lower():
+            return cliente  # Devolvemos el nombre exacto encontrado
+    
+    return None
+
 
 # Función para mover las facturas a las carpetas correspondientes
 def mover_facturas():
-    ruta_facturas = r"C:\Users\miguel-guinot\Documents\PRUEBA\Facturas"
-    ruta_clientes = r"C:\Users\miguel-guinot\Documents\PRUEBA\Clientes"
+    ruta_facturas = r"C:\Users\miguel-guinot\Documents\AutoFactura\Facturas"
+    ruta_clientes = r"C:\Users\miguel-guinot\Documents\AutoFactura\Clientes"
 
     for archivo in os.listdir(ruta_facturas):
         if archivo.endswith('.docx') or archivo.endswith('.pdf'):
@@ -108,7 +115,8 @@ def mover_facturas():
             cliente = extraer_cliente(ruta_factura)
             
             if cliente:
-                ruta_cliente = os.path.join(ruta_clientes, f'Cliente{cliente}')
+                ruta_cliente = os.path.join(ruta_clientes, cliente)
+
                 
                 # Si la carpeta del cliente no existe, la creamos
                 if not os.path.exists(ruta_cliente):
